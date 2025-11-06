@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom animations for theater mode */
+@keyframes fadeInSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-slide {
+  animation: fadeInSlide 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Apply dark theater mode styling globally */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #0e0e10; /* theater-bg */
+  color: #efeff1; /* theater-text */
+}
+
+/* Make sure all basic elements inherit the dark theme */
+* {
+  border-color: #2d2d2d; /* theater-border */
+}
+
+/* Style scrollbars for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #18181b; /* theater-surface */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2d2d2d; /* theater-border */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #adadb8; /* theater-text-muted */
+}
