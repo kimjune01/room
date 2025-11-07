@@ -54,7 +54,7 @@ class YouTubeSyncActivity(ActivityManager):
             # Use synthetic time calculation for playing videos
             if (self.state['is_playing'] and
                 not self.state['buffering_users'] and
-                now - self.state['last_state_update'] > 5.0):  # Update every 5 seconds
+                now - self.state['last_state_update'] > 1.0):  # Update every 1 second for tighter sync
 
                 # Fall back to synthetic calculation
                 elapsed = now - self.state['last_action_time']

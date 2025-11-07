@@ -56,6 +56,7 @@ export interface YouTubeState {
     type: string;
     timestamp: number;
   };
+  last_action_time?: number; // Local timestamp when user initiated an action (client-side only)
 }
 
 // Action types for activities

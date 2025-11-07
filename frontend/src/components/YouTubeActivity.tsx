@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import type { YouTubeState } from '../types';
 import { YouTubePlayer } from './YouTubePlayer';
 import { ActionDisplay } from './ActionDisplay';
@@ -11,9 +11,24 @@ interface YouTubeActivityProps {
   onPlayerStatusChange?: (status: {isAPIReady: boolean, isPlayerReady: boolean}) => void;
 }
 
-export function YouTubeActivity({ state, onAction, isHost = false, onPlayerStatusChange }: YouTubeActivityProps) {
+function YouTubeActivityComponent({ state, onAction, isHost = false, onPlayerStatusChange }: YouTubeActivityProps) {
   const [videoUrl, setVideoUrl] = useState('');
   const [seekTime, setSeekTime] = useState('');
+
+  // Track buffering state without debouncing for immediate response
+  const lastBufferingStateRef = useRef<boolean | null>(null);
+
+  const handleBuffering = useCallback((isBuffering: boolean) => {
+    // Only send if state actually changed
+    if (lastBufferingStateRef.current !== isBuffering) {
+      lastBufferingStateRef.current = isBuffering;
+      if (isBuffering) {
+        onAction({ type: 'activity:youtube:buffer_start' });
+      } else {
+        onAction({ type: 'activity:youtube:buffer_end' });
+      }
+    }
+  }, [onAction]);
 
   const extractVideoId = (url: string): string | null => {
     const trimmedUrl = url.trim();
@@ -96,14 +111,7 @@ export function YouTubeActivity({ state, onAction, isHost = false, onPlayerStatu
                 });
               }
             }}
-            onBuffering={(isBuffering) => {
-              // Send buffering status to server
-              if (isBuffering) {
-                onAction({ type: 'activity:youtube:buffer_start' });
-              } else {
-                onAction({ type: 'activity:youtube:buffer_end' });
-              }
-            }}
+            onBuffering={handleBuffering}
             onStateReport={(state) => {
               // Report current playback state to server when authoritative
               onAction({
@@ -205,3 +213,6 @@ export function YouTubeActivity({ state, onAction, isHost = false, onPlayerStatu
     </div>
   );
 }
+
+// Export component without memo for immediate re-renders
+export const YouTubeActivity = YouTubeActivityComponent;

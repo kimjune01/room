@@ -13,40 +13,14 @@ export class DebugLogger {
   private static LOG_KEY = 'youtube-debug-log';
 
   static log(message: string, data?: unknown): void {
-    const timestamp = new Date().toISOString();
-    const logEntry = `[${timestamp}] ${message}${data ? ' ' + JSON.stringify(data) : ''}\n`;
-
-    // Log to console
-    console.log(message, data || '');
-
-    // Get existing log
-    let existingLog = localStorage.getItem(this.LOG_KEY) || '';
-
-    // Append new entry
-    existingLog += logEntry;
-
-    // Trim if too large (keep last portion)
-    if (existingLog.length > this.MAX_LOG_SIZE) {
-      existingLog = existingLog.slice(-this.MAX_LOG_SIZE);
+    // Temporarily disabled to reduce performance overhead
+    // Only log to console for critical debugging
+    if (message.includes('ERROR') || message.includes('CRITICAL')) {
+      console.log(message, data || '');
     }
 
-    // Save to localStorage
-    localStorage.setItem(this.LOG_KEY, existingLog);
-
-    // Also try to send to backend for analysis (non-blocking)
-    try {
-      fetch('/api/debug-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timestamp, message, data })
-      }).catch((error: Error) => {
-        // Silently fail - backend logging is non-critical
-        console.debug('Failed to send log to backend:', error.message);
-      });
-    } catch (error) {
-      // Fetch not available or other error - silently ignore
-      console.debug('Debug logging to backend unavailable');
-    }
+    // Disable localStorage and network logging for performance
+    return;
   }
 
   static clear() {

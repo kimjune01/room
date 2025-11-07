@@ -153,8 +153,7 @@ class ConnectionManager:
             # Clean up disconnected clients
             for conn in disconnected:
                 self.rooms[room].discard(conn)
-                if conn in self.client_info:
-                    del self.client_info[conn]
+                self.client_info.pop(conn, None)
 
     async def send_to_user(self, room: str, username: str, message: dict):
         """Send message to specific user in room"""
@@ -171,8 +170,7 @@ class ConnectionManager:
                     except:
                         # Client disconnected, remove it
                         self.rooms[room].discard(connection)
-                        if connection in self.client_info:
-                            del self.client_info[connection]
+                        self.client_info.pop(connection, None)
 
     async def change_room_activity(self, room: str, user_id: str, activity_type: ActivityType, config: Dict = None) -> tuple[bool, str]:
         """Change room activity with permission check"""

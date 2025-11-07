@@ -1,47 +1,70 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 // Using Tailwind CSS classes instead of external CSS
-import type { Message, ActivityState, WebSocketMessage, YouTubeStateUpdate, YouTubeState, SnakeActivityState, YouTubeActivityState } from './types';
+import type { Message, ActivityState, WebSocketMessage, YouTubeStateUpdate, YouTubeState, SnakeActivityState, YouTubeActivityState, Activity } from './types';
 import { ActivitySwitcher } from './components/ActivitySwitcher';
 import { PersistentChat } from './components/PersistentChat';
 import { SnakeActivity } from './components/SnakeActivity';
 import { YouTubeActivity } from './components/YouTubeActivity';
 import { DebugLogger } from './utils/debug-logger';
-import { useAppStore } from './store/useAppStore';
 
 function App() {
-  // Get state and actions from Zustand store
-  const {
-    room, setRoom,
-    username, setUsername,
-    connected, setConnected,
-    messages, addMessage,
-    isHost, setIsHost,
-    host, setHost,
-    activities, setActivities,
-    currentActivity, setCurrentActivity,
-    wsRef, setWsRef,
-    sendMessage,
-    changeActivity,
-    sendActivityAction
-  } = useAppStore();
+  // Connection state
+  const [room, setRoom] = useState('testroom');
+  const [username, setUsername] = useState('');
+  const [connected, setConnected] = useState(false);
+  const [host, setHost] = useState('');
+  const [isHost, setIsHost] = useState(false);
 
-  // Keep playback-specific state as local state (excluding from Zustand)
+  // UI state
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [currentActivity, setCurrentActivity] = useState('youtube');
+
+  // WebSocket reference
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // Activity-specific state
   const [activityState, setActivityState] = useState<ActivityState | null>(null);
   const [youtubePlayerStatus, setYoutubePlayerStatus] = useState<{isAPIReady: boolean, isPlayerReady: boolean} | null>(null);
+
+  // Helper functions
+  const addMessage = useCallback((message: Message) => {
+    setMessages(prev => [...prev, message]);
+  }, []);
+
+  const sendMessage = useCallback((message: string) => {
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify({ type: 'message', message }));
+    }
+  }, []);
+
+  const changeActivity = useCallback((activityType: string) => {
+    if (wsRef.current && isHost) {
+      wsRef.current.send(JSON.stringify({
+        type: 'change_activity',
+        activity_type: activityType
+      }));
+    }
+  }, [isHost]);
+
+  const sendActivityAction = useCallback((action: any) => {
+    if (wsRef.current) {
+      wsRef.current.send(JSON.stringify(action));
+    }
+  }, []);
+
 
   const connect = () => {
     if (!username || !room) return;
 
-    const ws = new WebSocket(`ws://localhost:8001/ws/${room}/${username}`);
+    const ws = new WebSocket(`ws://localhost:8000/ws/${room}/${username}`);
 
     ws.onopen = () => {
-      console.log('Connected to WebSocket');
       setConnected(true);
     };
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data) as WebSocketMessage;
-      console.log('Received message:', message);
 
       if (message.type === 'role_assigned') {
         setIsHost(message.is_host || false);
@@ -71,44 +94,55 @@ function App() {
                  message.type === 'snake_player_joined' ||
                  message.type === 'snake_game_started' ||
                  message.type === 'snake_game_restarted') {
-        // Log YouTube messages for debugging with host/guest identification
+        // Optional: minimal logging for YouTube messages
         if (message.type.startsWith('youtube_')) {
           const userType = isHost ? 'HOST' : 'GUEST';
-          const logMsg = `[${userType}] YouTube broadcast received`;
-          DebugLogger.log(logMsg, message);
+          DebugLogger.log(`[${userType}] YouTube: ${message.type}`, message);
         }
         // Activity-specific state updates - update based on message type
+        // Simple check: process YouTube messages when we have YouTube activity state
         if (activityState && activityState.activity_type === 'youtube') {
-          setActivityState(prev => {
+            setActivityState(prev => {
             if (!prev || prev.activity_type !== 'youtube') return prev;
 
             // Handle YouTube-specific updates
             const update = message as YouTubeStateUpdate & { type: string };
             const currentState = prev.state as YouTubeState;
-            
+
             if (message.type === 'youtube_video_loaded') {
+              const newState = {
+                ...currentState,
+                video_id: update.video_id ?? currentState.video_id,
+                current_time: update.current_time ?? currentState.current_time
+              };
+
+              // Only update if state actually changed
+              if (newState.video_id === currentState.video_id &&
+                  newState.current_time === currentState.current_time) {
+                return prev;
+              }
+
               return {
                 ...prev,
-                state: {
-                  ...currentState,
-                  video_id: update.video_id ?? currentState.video_id,
-                  current_time: update.current_time ?? currentState.current_time
-                }
+                state: newState
               } as YouTubeActivityState;
             } else if (message.type === 'youtube_sync_update') {
+              // Simple approach: apply server state immediately
+              const newState = {
+                ...currentState,
+                video_id: update.video_id ?? currentState.video_id,
+                current_time: update.current_time ?? currentState.current_time,
+                is_playing: update.is_playing ?? currentState.is_playing,
+                playback_rate: update.playback_rate ?? currentState.playback_rate,
+                last_action_user: update.last_action_user ?? currentState.last_action_user
+              };
+
               return {
                 ...prev,
-                state: {
-                  ...currentState,
-                  video_id: update.video_id ?? currentState.video_id,
-                  current_time: update.current_time ?? currentState.current_time,
-                  is_playing: update.is_playing ?? currentState.is_playing,
-                  playback_rate: update.playback_rate ?? currentState.playback_rate,
-                  last_action_user: update.last_action_user ?? currentState.last_action_user
-                }
+                state: newState
               } as YouTubeActivityState;
             } else if (message.type.startsWith('youtube_')) {
-              // Other YouTube updates - merge properties
+              // Simple approach: apply all YouTube updates immediately
               const newState: YouTubeState = { ...currentState };
               if (update.current_time !== undefined) newState.current_time = update.current_time;
               if (update.is_playing !== undefined) newState.is_playing = update.is_playing;
@@ -132,7 +166,6 @@ function App() {
     };
 
     ws.onclose = () => {
-      console.log('Disconnected from WebSocket');
       setConnected(false);
     };
 
@@ -140,26 +173,47 @@ function App() {
       console.error('WebSocket error:', error);
     };
 
-    setWsRef(ws);
+    wsRef.current = ws;
   };
 
   const disconnect = () => {
-    if (wsRef) {
-      wsRef.close();
-      setWsRef(null);
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
   };
 
-  // Update sendActivityAction to include debug logging since it's not in the store
-  const sendActivityActionWithLogging = (action: Record<string, unknown>) => {
-    // Log YouTube actions being sent with host/guest identification
+  // Create stable wrapper function that doesn't recreate on every render
+  const sendActivityActionWithLogging = useCallback((action: Record<string, unknown>) => {
+    // Only log important actions to reduce noise
     if (typeof action.type === 'string' && action.type.includes('youtube')) {
-      const userType = isHost ? 'HOST' : 'GUEST';
-      const logMsg = `[${userType}] Sending YouTube action to backend`;
-      DebugLogger.log(logMsg, action);
+      // Only log user-initiated actions, not sync updates
+      const isUserAction = action.type === 'activity:youtube:play' ||
+                          action.type === 'activity:youtube:pause' ||
+                          action.type === 'activity:youtube:seek' ||
+                          action.type === 'activity:youtube:load_video';
+
+      if (isUserAction) {
+        const userType = isHost ? 'HOST' : 'GUEST';
+        const logMsg = `[${userType}] User action: ${action.type}`;
+        DebugLogger.log(logMsg, action);
+
+        // Track local action timestamp
+        setActivityState(prev => {
+          if (!prev || prev.activity_type !== 'youtube') return prev;
+          return {
+            ...prev,
+            state: {
+              ...prev.state,
+              last_action_time: Date.now() / 1000
+            }
+          } as YouTubeActivityState;
+        });
+      }
     }
+
     sendActivityAction(action);
-  };
+  }, [isHost, sendActivityAction]);
 
   useEffect(() => {
     return () => {
@@ -175,6 +229,29 @@ function App() {
       setYoutubePlayerStatus(null);
     }
   }, [currentActivity]);
+
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  // Memoized expensive computations to prevent unnecessary re-renders
+  const isTheaterMode = useMemo(() => {
+    return currentActivity === 'youtube' &&
+      activityState?.activity_type === 'youtube' &&
+      (activityState.state as YouTubeState)?.video_id != null;
+  }, [currentActivity, activityState]);
+
+  // Memoized activity switcher props to prevent unnecessary re-renders
+  const activitySwitcherProps = useMemo(() => ({
+    activities,
+    currentActivity,
+    isHost,
+    onActivityChange: changeActivity
+  }), [activities, currentActivity, isHost, changeActivity]);
+
+  // Memoized chat props to prevent unnecessary re-renders
+  const chatProps = useMemo(() => ({
+    messages,
+    onSendMessage: sendMessage,
+    isTheaterMode
+  }), [messages, sendMessage, isTheaterMode]);
 
   if (!connected) {
     return (
@@ -242,11 +319,6 @@ function App() {
     return <div>Loading activity...</div>;
   };
 
-  // Theater mode for YouTube activity
-  const isTheaterMode = currentActivity === 'youtube' && 
-    activityState?.activity_type === 'youtube' && 
-    (activityState.state as YouTubeState)?.video_id != null;
-
   return (
     <div className="min-h-screen transition-all duration-500 ease-out bg-gradient-to-br from-theater-bg to-theater-bg-light text-theater-text p-0 m-0">
       {!isTheaterMode && (
@@ -264,10 +336,7 @@ function App() {
             </div>
             <div className="flex items-center">
               <ActivitySwitcher
-                activities={activities}
-                currentActivity={currentActivity}
-                isHost={isHost}
-                onActivityChange={changeActivity}
+                {...activitySwitcherProps}
                 isTheaterMode={false}
               />
             </div>
@@ -306,10 +375,7 @@ function App() {
             </div>
             <div className="flex items-center gap-3">
               <ActivitySwitcher
-                activities={activities}
-                currentActivity={currentActivity}
-                isHost={isHost}
-                onActivityChange={changeActivity}
+                {...activitySwitcherProps}
                 isTheaterMode={true}
               />
               <span className="text-theater-text font-medium">{username}</span>
@@ -337,9 +403,7 @@ function App() {
         </div>
 
         <PersistentChat
-          messages={messages}
-          onSendMessage={sendMessage}
-          isTheaterMode={isTheaterMode}
+          {...chatProps}
         />
       </div>
     </div>

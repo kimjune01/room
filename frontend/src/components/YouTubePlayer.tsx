@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { DebugLogger } from '../utils/debug-logger';
 import type { YouTubePlayer as YouTubePlayerType, YouTubePlayerEvent } from '../types';
 
-// Constants for better maintainability
-const SYNC_THRESHOLD_SECONDS = 2;
-const INITIAL_SYNC_DELAY_MS = 1000;
-const SYNC_INTERVAL_MS = 1000;
+
+// Constants for better maintainability - reduced for immediate response
+const SYNC_THRESHOLD_SECONDS = 1; // Reduced from 2 to 1 second
+const INITIAL_SYNC_DELAY_MS = 500; // Reduced from 1000 to 500ms
+const SYNC_INTERVAL_MS = 500; // Reduced from 1000 to 500ms for faster sync
 
 interface YouTubePlayerProps {
   videoId: string;
@@ -24,7 +25,7 @@ interface YouTubePlayerProps {
   onStatusChange?: (status: {isAPIReady: boolean, isPlayerReady: boolean}) => void;
 }
 
-export function YouTubePlayer({
+function YouTubePlayerComponent({
   videoId,
   currentTime,
   isPlaying,
@@ -262,22 +263,18 @@ export function YouTubePlayer({
         playerRef.current = null;
       }
     };
+    // Only recreate player when API loads or video changes - NOT on play/pause state changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAPIReady, videoId, currentTime, isPlaying, playbackRate]);
+  }, [isAPIReady, videoId]);
 
   // Reset initial sync flag when video changes
   useEffect(() => {
-    console.log('Video ID changed, resetting initial sync flag:', videoId);
     isInitialSyncRef.current = true;
   }, [videoId]);
 
   // Sync player state with backend (only for non-authoritative clients)
   useEffect(() => {
-    console.log('Sync effect running - isAuthoritative:', isAuthoritative, 'isPlaying:', isPlaying);
     if (!isPlayerReady || !playerRef.current || isAuthoritative) {
-      if (isAuthoritative) {
-        console.log('Skipping sync - user is authoritative');
-      }
       return;
     }
 
@@ -285,18 +282,24 @@ export function YouTubePlayer({
     const now = Date.now();
 
     try {
+      // Additional validation: ensure player methods exist
+      if (typeof player.getPlayerState !== 'function' ||
+          typeof player.playVideo !== 'function' ||
+          typeof player.pauseVideo !== 'function') {
+        log('Player methods not available yet, skipping sync');
+        return;
+      }
+
       // Sync playback state (only when NOT authoritative)
       const playerState = player.getPlayerState();
       const shouldBePlaying = isPlaying;
       const isCurrentlyPlaying = playerState === window.YT.PlayerState.PLAYING;
 
       if (shouldBePlaying && !isCurrentlyPlaying) {
-        console.log('Syncing: Starting playback (authoritative:', isAuthoritative, ')');
         isProgrammaticChange.current = true;
         player.playVideo();
         setTimeout(() => { isProgrammaticChange.current = false; }, 100);
       } else if (!shouldBePlaying && isCurrentlyPlaying) {
-        console.log('Syncing: Pausing playback (authoritative:', isAuthoritative, ')');
         isProgrammaticChange.current = true;
         player.pauseVideo();
         setTimeout(() => { isProgrammaticChange.current = false; }, 100);
@@ -304,11 +307,15 @@ export function YouTubePlayer({
 
       // Sync time (avoid frequent seeking, only for non-authoritative clients)
       if (now - lastSyncTime.current > SYNC_INTERVAL_MS) {
+        if (typeof player.getCurrentTime !== 'function' || typeof player.seekTo !== 'function') {
+          log('Player time methods not available yet, skipping time sync');
+          return;
+        }
+
         const playerTime = player.getCurrentTime();
         const timeDiff = Math.abs(playerTime - currentTime);
 
         if (timeDiff > SYNC_THRESHOLD_SECONDS) {
-          console.log(`Syncing: Seeking from ${playerTime} to ${currentTime}`);
           isProgrammaticChange.current = true;
           player.seekTo(currentTime, true);
           setTimeout(() => { isProgrammaticChange.current = false; }, 100);
@@ -318,9 +325,12 @@ export function YouTubePlayer({
       }
 
       // Sync playback rate (only for non-authoritative clients)
+      if (typeof player.getPlaybackRate !== 'function' || typeof player.setPlaybackRate !== 'function') {
+        log('Player rate methods not available yet, skipping rate sync');
+        return;
+      }
       const currentRate = player.getPlaybackRate();
       if (Math.abs(currentRate - playbackRate) > 0.01) {
-        console.log(`Syncing: Changing rate from ${currentRate} to ${playbackRate}`);
         player.setPlaybackRate(playbackRate);
       }
 
@@ -344,14 +354,11 @@ export function YouTubePlayer({
         // Detect seek: time changed significantly beyond expected playback
         const expectedTime = lastKnownTime.current + (isCurrentlyPlaying ? (SYNC_INTERVAL_MS / 1000) : 0);
         const timeDiff = Math.abs(currentTime - expectedTime);
-        
+
         if (timeDiff > 2 && Math.abs(currentTime - lastKnownTime.current) > 2) {
-          // Large time jump detected - likely a seek
-          console.log('Detected seek via time check:', lastKnownTime.current, '->', currentTime);
           onSeek?.(currentTime);
           lastKnownTime.current = currentTime;
         } else {
-          // Normal playback progression
           lastKnownTime.current = currentTime;
         }
         
@@ -444,3 +451,6 @@ export function YouTubePlayer({
     </div>
   );
 }
+
+// Export component without memo for immediate re-renders and sync
+export const YouTubePlayer = YouTubePlayerComponent;
