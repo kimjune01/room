@@ -1,12 +1,10 @@
 from typing import Dict, List
 from .base import ActivityManager, ActivityType
-from .snake import SnakeGameActivity
 from .youtube import YouTubeSyncActivity
 
 class ActivityRegistry:
     def __init__(self):
         self.activity_classes = {
-            ActivityType.SNAKE: SnakeGameActivity,
             ActivityType.YOUTUBE: YouTubeSyncActivity,
         }
 

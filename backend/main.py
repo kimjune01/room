@@ -273,10 +273,7 @@ async def websocket_endpoint(websocket: WebSocket, room: str, username: str):
                             "youtube_play",
                             "youtube_pause",
                             "youtube_seek",
-                            "youtube_rate_changed",
-                            "snake_joined",
-                            "snake_game_started",
-                            "snake_game_restarted"
+                            "youtube_rate_changed"
                         ]
 
                         if result and result.get("type") in state_changing_actions:

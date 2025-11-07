@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 // Using Tailwind CSS classes instead of external CSS
-import type { Message, ActivityState, WebSocketMessage, YouTubeStateUpdate, YouTubeState, SnakeActivityState, YouTubeActivityState, Activity } from './types';
+import type { Message, ActivityState, WebSocketMessage, YouTubeStateUpdate, YouTubeState, YouTubeActivityState, Activity } from './types';
 import { ActivitySwitcher } from './components/ActivitySwitcher';
 import { PersistentChat } from './components/PersistentChat';
-import { SnakeActivity } from './components/SnakeActivity';
 import { YouTubeActivity } from './components/YouTubeActivity';
 import { DebugLogger } from './utils/debug-logger';
 
@@ -73,9 +72,9 @@ function App() {
         setActivities(message.activities || []);
       } else if (message.type === 'activity_state') {
         setActivityState(message as ActivityState);
-        setCurrentActivity(message.activity_type || 'snake');
+        setCurrentActivity(message.activity_type || 'youtube');
       } else if (message.type === 'activity_changed') {
-        setCurrentActivity(message.activity_type ?? 'snake');
+        setCurrentActivity(message.activity_type ?? 'youtube');
         addMessage({
           type: 'activity_changed',
           message: `Activity changed to ${message.activity_name} by ${message.changed_by}`,
@@ -83,17 +82,13 @@ function App() {
           activity_name: message.activity_name,
           changed_by: message.changed_by
         } as Message);
-      } else if (message.type === 'snake_state' ||
-                 message.type === 'youtube_sync_update' ||
+      } else if (message.type === 'youtube_sync_update' ||
                  message.type === 'youtube_video_loaded' ||
                  message.type === 'youtube_play' ||
                  message.type === 'youtube_pause' ||
                  message.type === 'youtube_seek' ||
                  message.type === 'youtube_rate_changed' ||
-                 message.type === 'youtube_master_changed' ||
-                 message.type === 'snake_player_joined' ||
-                 message.type === 'snake_game_started' ||
-                 message.type === 'snake_game_restarted') {
+                 message.type === 'youtube_master_changed') {
         // Optional: minimal logging for YouTube messages
         if (message.type.startsWith('youtube_')) {
           const userType = isHost ? 'HOST' : 'GUEST';
@@ -286,23 +281,6 @@ function App() {
 
   const renderActivity = () => {
     switch (currentActivity) {
-      case 'snake':
-        if (activityState && activityState.activity_type === 'snake') {
-          return (
-            <SnakeActivity
-              state={activityState.state}
-              config={(activityState as SnakeActivityState & { config?: { grid_width: number; grid_height: number; tick_rate: number; max_players: number } }).config ?? {
-                grid_width: 30,
-                grid_height: 30,
-                tick_rate: 200,
-                max_players: 4
-              }}
-              isPlayer={(activityState as SnakeActivityState & { is_player?: boolean }).is_player ?? false}
-              onAction={sendActivityActionWithLogging}
-            />
-          );
-        }
-        break;
       case 'youtube':
         if (activityState && activityState.activity_type === 'youtube') {
           return (

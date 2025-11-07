@@ -5,15 +5,7 @@ export interface Activity {
 }
 
 // Union type for all possible activity states
-export type ActivityState = SnakeActivityState | YouTubeActivityState;
-
-export interface SnakeActivityState {
-  type: 'activity_state';
-  activity_type: 'snake';
-  activity_name: string;
-  state: SnakeState;
-  users: string[];
-}
+export type ActivityState = YouTubeActivityState;
 
 export interface YouTubeActivityState {
   type: 'activity_state';
@@ -21,26 +13,6 @@ export interface YouTubeActivityState {
   activity_name: string;
   state: YouTubeState;
   users: string[];
-}
-
-export interface SnakePosition {
-  x: number;
-  y: number;
-}
-
-export interface SnakePlayer {
-  positions: SnakePosition[];
-  direction: string;
-  alive: boolean;
-  score: number;
-}
-
-export interface SnakeState {
-  status: 'waiting' | 'playing' | 'finished';
-  players: Record<string, SnakePlayer>;
-  food: SnakePosition[];
-  tick_count: number;
-  winner: string | null;
 }
 
 export interface YouTubeState {
@@ -60,12 +32,6 @@ export interface YouTubeState {
 }
 
 // Action types for activities
-export type SnakeAction =
-  | { type: 'activity:snake:join_game' }
-  | { type: 'activity:snake:start_game' }
-  | { type: 'activity:snake:restart_game' }
-  | { type: 'activity:snake:change_direction'; direction: string };
-
 export type YouTubeAction =
   | { type: 'activity:youtube:load_video'; video_id: string }
   | { type: 'activity:youtube:play' }
@@ -76,7 +42,7 @@ export type YouTubeAction =
   | { type: 'activity:youtube:buffering_end' }
   | { type: 'activity:youtube:sync'; current_time: number; is_playing: boolean; playback_rate: number };
 
-export type ActivityAction = SnakeAction | YouTubeAction;
+export type ActivityAction = YouTubeAction;
 
 // Message types for WebSocket communication
 export type Message =
@@ -136,7 +102,7 @@ export interface ActivityStateMessage {
   type: 'activity_state';
   activity_type: string;
   activity_name: string;
-  state: SnakeState | YouTubeState;
+  state: YouTubeState;
   users: string[];
 }
 
@@ -146,11 +112,6 @@ export type WebSocketMessage =
   | RoleAssignedMessage
   | AvailableActivitiesMessage
   | ActivityStateMessage
-  | {
-      type: 'snake_state' | 'snake_player_joined' | 'snake_game_started' | 'snake_game_restarted';
-      state?: SnakeState;
-      [key: string]: unknown;
-    }
   | {
       type: 'youtube_sync_update' | 'youtube_video_loaded' | 'youtube_play' | 'youtube_pause' | 'youtube_seek' | 'youtube_rate_changed' | 'youtube_master_changed';
       video_id?: string;

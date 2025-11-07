@@ -5,13 +5,11 @@ from typing import Dict, Any, Set
 from datetime import datetime
 
 class ActivityType(Enum):
-    SNAKE = "snake"
     YOUTUBE = "youtube"
 
     @property
     def display_name(self) -> str:
         names = {
-            ActivityType.SNAKE: "🐍 Snake Game",
             ActivityType.YOUTUBE: "📺 Watch Together"
         }
         return names[self]
@@ -19,7 +17,6 @@ class ActivityType(Enum):
     @property
     def description(self) -> str:
         descriptions = {
-            ActivityType.SNAKE: "Multiplayer snake game with real-time action",
             ActivityType.YOUTUBE: "Synchronized video watching experience"
         }
         return descriptions[self]
